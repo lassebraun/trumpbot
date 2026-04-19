@@ -1,7 +1,7 @@
 import asyncio
 
 from src import config
-from broker.trade_executor import TradeExecutor
+from src.broker.trade_executor import TradeExecutor
 from src.database.crud import DatabaseCrud, QueryFactory
 from src.database.models import Posts
 from src.news.scheduler import get_or_refresh_digest

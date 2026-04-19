@@ -3,7 +3,7 @@ import time
 import logging
 import asyncio
 
-from database.crud import DatabaseCrud
+from src.database.crud import DatabaseCrud
 from src.broker.trade_executor import TradeExecutor
 from src.scripts.main_loop import main_loop
 from src.broker.scheduler import scheduler_loop
