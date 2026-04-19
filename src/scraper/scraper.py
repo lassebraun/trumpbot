@@ -1,12 +1,9 @@
-import html
-
 from curl_cffi import requests
 from bs4 import BeautifulSoup
-import json
-from config import Config
+from src.config import Config
 
 session = requests.Session(impersonate="chrome116")
-session.get(Config.TRUMP_ACCOUNT_PAGE) # establish session
+session.get(Config.trump_account_page) # establish session
 
 def get_latest_posts(since_id: str | None = None, limit: int = 5) -> list[dict]:
     params = {"limit": limit}
@@ -14,7 +11,7 @@ def get_latest_posts(since_id: str | None = None, limit: int = 5) -> list[dict]:
         params["since_id"] = since_id
 
     response = session.get(
-        f"{Config.TRUTH_SOCIAL_BASE_URL}/accounts/{Config.TRUMP_ACCOUNT_ID}/statuses",
+        f"{Config.truth_social_base_url}/accounts/{Config.trump_account_id}/statuses",
         params=params,
     )
     response.raise_for_status()
