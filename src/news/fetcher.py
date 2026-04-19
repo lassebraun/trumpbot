@@ -1,9 +1,9 @@
 import logging
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 
 import httpx
-import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 

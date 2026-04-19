@@ -1,18 +1,17 @@
-import os
 import logging
+import os
 from datetime import datetime, timezone, timedelta
-
 from enum import Enum
 
+from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
-from alpaca.data.enums import DataFeed
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading import StopLossRequest, TakeProfitRequest
-from dotenv import load_dotenv
 from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
+from alpaca.trading.requests import MarketOrderRequest
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 load_dotenv()

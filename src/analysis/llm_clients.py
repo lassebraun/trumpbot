@@ -2,16 +2,15 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from ollama import AsyncClient
 from google import genai
 from google.genai import types
-from typing import Tuple
+from ollama import AsyncClient
 
-import config
-from database.models import Analyses, Posts, NewsDigest
-from src.news.fetcher import Headline, format_headlines_for_llm
+from src import config
+from src.database.models import Analyses, Posts, NewsDigest
 from src.analysis.base import BaseLLMClient
 from src.analysis.parse_output import parse_response
+from src.news.fetcher import Headline, format_headlines_for_llm
 
 logger = logging.getLogger(__name__)
 load_dotenv()

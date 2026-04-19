@@ -1,5 +1,6 @@
-from curl_cffi import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests
+
 from src.config import Config
 
 session = requests.Session(impersonate="chrome116")

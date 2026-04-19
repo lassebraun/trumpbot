@@ -1,9 +1,10 @@
+from datetime import datetime
+from typing import TypeVar, Type, Callable, Any, Sequence
+
 from sqlalchemy import Engine
 from sqlmodel import SQLModel, select, Session
-from src.database.models import Posts
-from datetime import datetime
 
-from typing import TypeVar, Type, Callable, Any, Sequence
+from src.database.models import Posts
 
 T = TypeVar("T", bound=SQLModel)
 

@@ -1,7 +1,9 @@
-from typing import Optional
-from sqlmodel import Field, SQLModel
-from sqlalchemy import Column, Integer
 from datetime import datetime, timezone
+from typing import Optional
+
+from sqlalchemy import Column, Integer
+from sqlmodel import Field, SQLModel
+
 
 class Posts(SQLModel, table=True):
     __table_args__ = {"extend_existing": True}

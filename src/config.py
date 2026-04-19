@@ -1,8 +1,8 @@
-from dataclasses import dataclass
 from typing import List
 
-from analysis.base import BaseLLMClient
-from analysis.llm_clients import GemmaLocalClient
+from src.analysis.base import BaseLLMClient
+from src.analysis.llm_clients import GemmaLocalClient, GeminiClient
+
 
 class Config:
     trump_account_id: str = "107780257626128497"
@@ -11,10 +11,10 @@ class Config:
 
     database_name = "database.db"
 
-    summary_client = GemmaLocalClient()
+    summary_client = GeminiClient()
 
     analysis_clients: List[BaseLLMClient] = [
-        GemmaLocalClient()
+        GeminiClient()
     ]
 
     analysis_system_prompt = """You are a financial analyst specializing in political risk and market impact assessment.

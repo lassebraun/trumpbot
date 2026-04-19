@@ -1,11 +1,11 @@
 import logging
+from typing import Tuple
 
 from alpaca.data import DataFeed
 
-from broker.client import BrokerClient, TradingDirection
-from database.crud import DatabaseCrud, QueryFactory
-from database.models import Trade, Analyses
-from typing import Tuple
+from src.broker.client import BrokerClient, TradingDirection
+from src.database.crud import DatabaseCrud, QueryFactory
+from src.database.models import Trade, Analyses
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ class TradeExecutor:
     def process_analysis(self, analysis: Analyses) -> str | None:
         if not self._should_trade(analysis):
             return None
-        qty = self._calculate_qty()
-        stop_loss, take_profit, duration = self._calculate_exits()
+        qty = self._calculate_qty(analysis.impact_score, analysis.ticker)
+        stop_loss, take_profit, duration = self._calculate_exits(analysis.impact_score, analysis.ticker, TradingDirection(analysis.direction.upper()))
 
         order = self.broker.open_positions(
             ticker=analysis.ticker,
@@ -61,7 +61,7 @@ class TradeExecutor:
         For trades where the order was accepted but entry_price is not yet recorded,
         check if Alpaca has filled them and update the DB.
         """
-        unfilled = self.crud.get_many(QueryFactory.unfilled_trades())
+        unfilled = self.crud.get_many(Trade, QueryFactory.unfilled_trades())
         for trade in unfilled:
             result = self.broker.get_order_fill(trade.alpaca_order_id)
             if result is None:
@@ -82,7 +82,7 @@ class TradeExecutor:
         For trades that are filled, still open, and past their close_at window,
         submit a market close to Alpaca.
         """
-        overdue = self.crud.get_many(QueryFactory.overdue_trades())
+        overdue = self.crud.get_many(Trade, QueryFactory.overdue_trades())
         for trade in overdue:
             success = self.broker.close_position(trade.ticker)
             if success:
@@ -96,7 +96,7 @@ class TradeExecutor:
         check if Alpaca closed them (via bracket stop/take profit or our market close)
         and record the exit details + P&L.
         """
-        unclosed = self.crud.get_many(QueryFactory.unclosed_trades())
+        unclosed = self.crud.get_many(Trade, QueryFactory.unclosed_trades())
         for trade in unclosed:
             result = self.broker.get_closed_position(trade.alpaca_order_id)
             if result is None:
@@ -117,7 +117,7 @@ class TradeExecutor:
             )
 
 
-    def _should_trade(self, analysis: AnalysisResult) -> bool:
+    def _should_trade(self, analysis: Analyses) -> bool:
         if not analysis.impact_score > 5:
             return False
         if not self._is_market_open():
@@ -135,7 +135,7 @@ class TradeExecutor:
         if trade.entry_price is None:
             return 0.0
         diff = exit_price - trade.entry_price
-        if trade.direction == TradingDirection.SHORT:
+        if trade.direction.upper() == TradingDirection.SHORT:
             diff = -diff
         return round(diff * trade.qty, 4)
 

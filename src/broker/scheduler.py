@@ -1,9 +1,7 @@
 import logging
 import time
 
-from broker.client import BrokerClient
-from broker.trade_executor import TradeExecutor
-from database.crud import DatabaseCrud
+from src.broker.trade_executor import TradeExecutor
 
 logger = logging.getLogger(__name__)
 

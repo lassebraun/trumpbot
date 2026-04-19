@@ -1,10 +1,8 @@
-from typing import Tuple
 import json
 import logging
-
 from datetime import datetime
 
-from database.models import Posts, NewsDigest, Analyses
+from src.database.models import Posts, NewsDigest, Analyses
 
 logger = logging.getLogger(__name__)
 _expected_keys = {"impact_score", "ticker", "direction", "reasoning"}

@@ -1,19 +1,19 @@
 import asyncio
 
-import config
-from broker.client import BrokerClient
+from src import config
 from broker.trade_executor import TradeExecutor
 from src.database.crud import DatabaseCrud, QueryFactory
-from src.database.models import Posts, Analyses
-from src.scraper.scraper import get_latest_posts
+from src.database.models import Posts
 from src.news.scheduler import get_or_refresh_digest
+from src.scraper.scraper import get_latest_posts
+
 
 async def main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor) -> None:
 
     while True:
         # Avoid getting rate blocked by the api
         anchor = crud.get_nth_latest(5)
-        posts = get_latest_posts(since_id=anchor.id)
+        posts = get_latest_posts(since_id=anchor.id if anchor else None)
         new_posts = []
 
         for post in posts:

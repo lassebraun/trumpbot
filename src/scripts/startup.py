@@ -1,10 +1,11 @@
 import logging
+from typing import Tuple
+
 from src.broker.client import BrokerClient
-from src.database import models, db
+from src.database import db
 from src.database.crud import DatabaseCrud
 from src.database.db import init_posts
 from src.scraper import scraper
-from typing import Tuple
 
 logger = logging.getLogger(__name__)
 

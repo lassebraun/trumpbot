@@ -1,12 +1,12 @@
+import os
 from pathlib import Path
 
 from sqlalchemy import Engine, text
 from sqlmodel import create_engine, SQLModel
-import os
 
-from src.database.models import Posts
 from src.config import Config
 from src.database.crud import DatabaseCrud, QueryFactory
+from src.database.models import Posts
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 DB_PATH = DATA_DIR / Config.database_name

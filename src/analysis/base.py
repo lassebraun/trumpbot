@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 
-from database.models import Analyses, Posts, NewsDigest
+from src.database.models import Analyses, Posts, NewsDigest
 from src.news.fetcher import Headline
-
 
 
 class BaseLLMClient(ABC):

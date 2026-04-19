@@ -1,12 +1,9 @@
 import logging
 from datetime import datetime, timezone
 
-from anthropic import AsyncAnthropic
-from typing import Type
-
-from analysis.base import BaseLLMClient
-from src.news.fetcher import Headline, fetch_all_headlines, format_headlines_for_llm
+from src.analysis.base import BaseLLMClient
 from src.database.models import NewsDigest
+from src.news.fetcher import fetch_all_headlines
 
 logger = logging.getLogger(__name__)
 
@@ -43,11 +40,7 @@ async def build_digest(llm_client: BaseLLMClient) -> NewsDigest:
             created_at=datetime.now(timezone.utc),
         )
 
-    _, summary = await llm_client.summarize_news(headlines=headlines)
-    digest = NewsDigest(
-        summary=summary,
-        headline_count=len(headlines),
-        created_at=datetime.now(timezone.utc),
-    )
+    digest = await llm_client.summarize_news(headlines=headlines)
+
     logger.info("Digest built successfully.")
     return digest
