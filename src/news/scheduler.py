@@ -42,7 +42,7 @@ async def get_or_refresh_digest() -> NewsDigest:
     if digest:
         age = datetime.now(timezone.utc) - digest.created_at.replace(tzinfo=timezone.utc)
         if age <= timedelta(hours=config.Config.max_digest_age):
-            logger.info(f"Using cached digest from {digest.created_at}")
+            #logger.info(f"Using cached digest from {digest.created_at}") - Too verbose (every 10 secs)
             return digest
 
 
