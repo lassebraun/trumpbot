@@ -16,10 +16,12 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 load_dotenv()
 
+
 class TradingDirection(str, Enum):
     LONG = "LONG"
     SHORT = "SHORT"
     NULL = "NULL"
+
 
 class BrokerClient:
     def __init__(self):
@@ -40,8 +42,8 @@ class BrokerClient:
             direction: TradingDirection,
             stop_loss: float,
             take_profit: float,
-    ) -> str|None:
-        """Opens a market order. Returns alpaca order ID or None on failure"""
+    ) -> str | None:
+        """Opens a bracket order. Returns alpaca order ID or None on failure."""
         try:
             side = OrderSide.BUY if direction == TradingDirection.LONG else OrderSide.SELL
             request_params = {
@@ -72,40 +74,45 @@ class BrokerClient:
             return False
 
     def get_order_fill(self, alpaca_order_id: str) -> tuple[float, datetime] | None:
+        """Returns (fill_price, fill_time) if the entry order is filled, None otherwise."""
         try:
             order = self.client.get_order_by_id(alpaca_order_id)
             if order.status == OrderStatus.FILLED and order.filled_avg_price:
                 return float(order.filled_avg_price), order.filled_at
+            return None
         except Exception as e:
             logger.error(f"Failed to get order fill for {alpaca_order_id}: {e}")
             return None
 
     def get_closed_position(self, alpaca_order_id: str) -> tuple[float, datetime, str] | None:
+        """
+        Checks if a bracket position has been closed by stop loss or take profit.
+        Returns (exit_price, exit_time, exit_reason) or None if still open.
+        Only inspects bracket legs — does not return the parent entry fill.
+        """
         try:
             order = self.client.get_order_by_id(alpaca_order_id)
 
-            if order.status not in (OrderStatus.FILLED, OrderStatus.PARTIALLY_FILLED):
+            if not order.legs:
                 return None
 
-            if order.legs:
-                for leg in order.legs:
-                    if leg.status == OrderStatus.FILLED and leg.filled_avg_price:
-                        reason = self._classify_exit_reason(leg)
-                        return float(leg.filled_avg_price), leg.filled_at, reason
-            if order.status == OrderStatus.FILLED and order.filled_avg_price:
-                return float(order.filled_avg_price), order.filled_at, "time"
+            for leg in order.legs:
+                if leg.status == OrderStatus.FILLED and leg.filled_avg_price:
+                    reason = self._classify_exit_reason(leg)
+                    logger.debug(
+                        f"Exit leg filled: order_type={leg.order_type} reason={reason} price={leg.filled_avg_price}"
+                    )
+                    return float(leg.filled_avg_price), leg.filled_at, reason
 
             return None
         except Exception as e:
             logger.error(f"Failed to get closed position for {alpaca_order_id}: {e}")
             return None
 
-    def get_recent_movement(self, ticker:str, minutes: int = 15) -> float:
-        """Returns price change as percentage over the last N minutes"""
+    def get_recent_movement(self, ticker: str, minutes: int = 15) -> float:
+        """Returns price change as percentage over the last N minutes."""
         try:
             now = datetime.now(timezone.utc)
-
-            # Using dict unpacking to satisfy linters confused by Pydantic v2 custom __init__
             request_params = {
                 "symbol_or_symbols": ticker,
                 "timeframe": TimeFrame.Minute,
@@ -114,27 +121,25 @@ class BrokerClient:
                 "feed": DataFeed.IEX
             }
             request = StockBarsRequest(**request_params)
-
             response = self.data_client.get_stock_bars(request)
             bars = response.data.get(ticker, [])
 
             if not bars or len(bars) < 2:
                 return 0.0
+
             change = (bars[-1].close - bars[0].open) / bars[0].open * 100
             return round(change, 4)
         except Exception as e:
             logger.error(f"Failed to get recent movement for {ticker}: {e}")
             return 0.0
 
-
     def get_account(self):
-        """Sanity check. Call on startup"""
+        """Sanity check. Call on startup."""
         return self.client.get_account()
 
     def _classify_exit_reason(self, leg) -> str:
-        """Infers exit reason from bracket order leg type"""
+        """Infers exit reason from bracket order leg type."""
         order_type = str(leg.order_type).lower()
-        side = str(leg.side).lower()
         if "stop" in order_type:
             return "stop_loss"
         if "limit" in order_type:

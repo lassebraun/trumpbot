@@ -1,13 +1,17 @@
 import logging
-from typing import Tuple
 import math
+from datetime import timedelta
+from typing import Tuple
 
 from alpaca.data import DataFeed
+from alpaca.data.requests import StockLatestQuoteRequest
+
 from src.broker.client import BrokerClient, TradingDirection
 from src.database.crud import DatabaseCrud, QueryFactory
 from src.database.models import Trade, Analyses
 
 logger = logging.getLogger(__name__)
+
 
 class TradeExecutor:
     def __init__(self, broker: BrokerClient, crud: DatabaseCrud):
@@ -17,36 +21,56 @@ class TradeExecutor:
     def process_analysis(self, analysis: Analyses) -> str | None:
         if not self._should_trade(analysis):
             return None
-        qty = self._calculate_qty(analysis.impact_score, analysis.ticker)
-        stop_loss, take_profit, duration = self._calculate_exits(analysis.impact_score, analysis.ticker, TradingDirection(analysis.direction.upper()))
 
-        order = self.broker.open_positions(
-            ticker=analysis.ticker,
-            qty=qty,
-            direction=TradingDirection(analysis.direction.upper()),
-            stop_loss=stop_loss,
-            take_profit=take_profit,
+        direction = TradingDirection(analysis.direction.upper())
+
+        # Fetch price once and pass through to avoid duplicate API calls
+        current_price = self._get_current_price(analysis.ticker)
+        if not current_price:
+            logger.error(f"Could not fetch price for {analysis.ticker}, skipping trade")
+            return None
+
+        qty = self._calculate_qty(analysis.impact_score, current_price)
+        if qty <= 0:
+            logger.warning(f"Calculated qty <= 0 for {analysis.ticker}, skipping trade")
+            return None
+
+        stop_loss, take_profit, duration = self._calculate_exits(
+            analysis.impact_score, current_price, direction
         )
 
-        trade = Trade(
-            analysis_id=analysis.id,
-            ticker = analysis.ticker,
-            direction = analysis.direction.upper(),
-            qty = qty,
-            duration_minutes = duration,
+        try:
+            order = self.broker.open_positions(
+                ticker=analysis.ticker,
+                qty=qty,
+                direction=direction,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
+            if not order:
+                return None
 
-            alpaca_order_id = order,
+            trade = Trade(
+                analysis_id=analysis.id,
+                ticker=analysis.ticker,
+                direction=direction.value,
+                qty=qty,
+                duration_minutes=duration,
+                alpaca_order_id=order,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+            )
+            self.crud.save(trade)
+            logger.info(
+                f"Trade saved for {analysis.ticker} | score={analysis.impact_score} "
+                f"qty={qty} stop={stop_loss} target={take_profit} duration={duration}min"
+            )
+            return order
+        except Exception as e:
+            logger.error(f"Failed to open position {analysis.ticker}: {e}")
+            return None
 
-            stop_loss = stop_loss,
-            take_profit = take_profit,
-        )
-
-        self.crud.save(trade)
-        return order
-
-
-
-
+    # ---------------------- Scheduler entrypoint ----------------------
 
     def run_scheduler_tick(self):
         """
@@ -56,6 +80,8 @@ class TradeExecutor:
         self._sync_filled_entries()
         self._close_overdue_trades()
         self._sync_closed_exits()
+
+    # ---------------------- Scheduler steps ----------------------
 
     def _sync_filled_entries(self) -> None:
         """
@@ -68,16 +94,17 @@ class TradeExecutor:
             if result is None:
                 continue
             fill_price, fill_time = result
-
-            from datetime import timedelta
             close_at = fill_time + timedelta(minutes=trade.duration_minutes)
 
-            self.crud.update(trade,{
+            self.crud.update(trade, {
                 "entry_price": fill_price,
                 "entry_time": fill_time,
                 "close_at": close_at,
             })
-            logger.info(f"Recorded fill for trade {trade.id} on {trade.ticker}: {fill_price} at {fill_time}")
+            logger.info(
+                f"Recorded fill for trade {trade.id} on {trade.ticker}: "
+                f"{fill_price} at {fill_time}, close_at={close_at}"
+            )
 
     def _close_overdue_trades(self) -> None:
         """
@@ -90,12 +117,12 @@ class TradeExecutor:
             if success:
                 logger.info(f"Submitted time-based close for trade {trade.id} on {trade.ticker}")
             else:
-                logger.error(f"Failed to close overdue trade ´{trade.id} on {trade.ticker}")
+                logger.error(f"Failed to close overdue trade {trade.id} on {trade.ticker}")
 
     def _sync_closed_exits(self) -> None:
         """
         For trades that are filled but exit not yet recorded,
-        check if Alpaca closed them (via bracket stop/take profit or our market close)
+        check if Alpaca closed them via bracket stop/take profit or our market close
         and record the exit details + P&L.
         """
         unclosed = self.crud.get_many(Trade, QueryFactory.unclosed_trades())
@@ -106,23 +133,26 @@ class TradeExecutor:
             exit_price, exit_time, exit_reason = result
             pnl = self._calculate_pnl(trade, exit_price)
 
-            self.crud.update(trade,{
+            self.crud.update(trade, {
                 "exit_price": exit_price,
                 "exit_time": exit_time,
                 "exit_reason": exit_reason,
                 "pnl": pnl,
             })
-
             logger.info(
                 f"Closed trade {trade.id} on {trade.ticker} | "
                 f"reason={exit_reason} | entry={trade.entry_price} exit={exit_price} | pnl={pnl:+.2f}"
             )
 
+    # ---------------------- Decision logic ----------------------
 
     def _should_trade(self, analysis: Analyses) -> bool:
-        if not analysis.impact_score > 5:
+        if analysis.impact_score <= 5:
             return False
         if not self._is_market_open():
+            return False
+        open_trades = self.crud.get_many(Trade, QueryFactory.open_trades())
+        if len(open_trades) > 0:
             return False
         if self._is_momentum_saturated(analysis.ticker, TradingDirection(analysis.direction.upper())):
             return False
@@ -131,15 +161,6 @@ class TradeExecutor:
     def _is_market_open(self) -> bool:
         clock = self.broker.client.get_clock()
         return clock.is_open
-
-    def _calculate_pnl(self, trade: Trade, exit_price: float) -> float:
-        """Calculate Profit/Loss in dollars based on direction and qty"""
-        if trade.entry_price is None:
-            return 0.0
-        diff = exit_price - trade.entry_price
-        if trade.direction.upper() == TradingDirection.SHORT:
-            diff = -diff
-        return round(diff * trade.qty, 4)
 
     def _is_momentum_saturated(self, ticker: str, direction: TradingDirection) -> bool:
         movement = self.broker.get_recent_movement(ticker)
@@ -150,45 +171,52 @@ class TradeExecutor:
             return True
         return False
 
-    def _calculate_qty(self, impact_score: float, ticker: str) -> float:
-        """Size position as a percentage of buying power based on impact score"""
+    # ---------------------- Calculation helpers ----------------------
+
+    def _calculate_qty(self, impact_score: float, current_price: float) -> int:
+        """Size position as a percentage of buying power based on impact score."""
         account = self.broker.get_account()
         buying_power = float(account.buying_power)
 
-        # 0.5% per impact point above threshold
-        pct = (impact_score -5) * 0.005
-        dollar_amount = round(buying_power * pct, 2)
-
-        current_price = self._get_current_price(ticker)
-        if not current_price:
-            return 0.0
+        # 0.5% of buying power per impact point above threshold (score 6 → 0.5%, 10 → 2.5%)
+        pct = (impact_score - 5) * 0.005
+        dollar_amount = buying_power * pct
 
         qty = math.floor(dollar_amount / current_price)
-        return round(qty, 2)
+        return qty
 
-
-    def _calculate_exits(self, impact_score: float, ticker: str, direction: TradingDirection) -> Tuple[float, float, int] | None:
-        """Returns (stop_loss, take_profit, duration) prices based on impact score and current price."""
-        current_price = self._get_current_price(ticker)
-        duration = lambda s: 7.5 * s - 15
-        if not current_price:
-            return None
-
+    def _calculate_exits(
+        self, impact_score: float, current_price: float, direction: TradingDirection
+    ) -> Tuple[float, float, int]:
+        """Returns (stop_loss, take_profit, duration_minutes) based on impact score and current price."""
+        # Stop widens with impact score: score 6 → 3.4%, score 10 → 5%
         stop_pct = 0.03 + (impact_score - 5) * 0.004
-        target_pct = stop_pct * 1.6
+        target_pct = stop_pct * 1.6  # constant 1.6 reward/risk ratio
 
         if direction == TradingDirection.LONG:
-            stop_loss = current_price * (1-stop_pct)
+            stop_loss = current_price * (1 - stop_pct)
             take_profit = current_price * (1 + target_pct)
         else:
-            stop_loss = current_price * (1+stop_pct)
-            take_profit = current_price * (1-target_pct)
+            stop_loss = current_price * (1 + stop_pct)
+            take_profit = current_price * (1 - target_pct)
 
-        return round(stop_loss, 2), round(take_profit, 2), duration(impact_score)
+        # Duration scales from 30min (score 5) to 60min (score 10)
+        duration = int(30 + (impact_score - 5) * 6)
 
-    def _get_current_price(self, ticker) -> float | None:
+        return round(stop_loss, 2), round(take_profit, 2), duration
+
+    def _calculate_pnl(self, trade: Trade, exit_price: float) -> float:
+        """Calculates P&L in dollars based on direction and qty."""
+        if trade.entry_price is None:
+            return 0.0
+        diff = exit_price - trade.entry_price
+        if trade.direction.upper() == TradingDirection.SHORT.value:
+            diff = -diff
+        return round(diff * trade.qty, 4)
+
+    def _get_current_price(self, ticker: str) -> float | None:
+        """Fetches latest ask price via the data client."""
         try:
-            from alpaca.data.requests import StockLatestQuoteRequest
             request = StockLatestQuoteRequest(symbol_or_symbols=ticker, feed=DataFeed.IEX)
             quote = self.broker.data_client.get_stock_latest_quote(request)
             return float(quote[ticker].ask_price)
