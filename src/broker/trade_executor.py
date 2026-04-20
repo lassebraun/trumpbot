@@ -1,5 +1,6 @@
 import logging
 from typing import Tuple
+import math
 
 from alpaca.data import DataFeed
 from src.broker.client import BrokerClient, TradingDirection
