@@ -20,10 +20,10 @@ def init_db() -> Engine:
     SQLModel.metadata.create_all(engine)
     return engine
 
-def init_posts(posts: list[dict], crud: DatabaseCrud) -> None:
+def init_posts(posts: Posts, crud: DatabaseCrud) -> None:
     for post in posts:
-        if not crud.get_one(Posts, QueryFactory.by_id(post["id"])):
-            crud.save(Posts(**post))
+        if not crud.get_one(Posts, QueryFactory.by_id(post.id)):
+            crud.save(post)
 
 def get_engine() -> Engine:
     engine = create_engine(f"sqlite:///{DB_PATH}",
