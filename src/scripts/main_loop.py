@@ -29,6 +29,7 @@ async def main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor) -> None:
             if new_posts:
                 analysis_coros = []
                 for post in new_posts:
+                    logger.info(f"Processing post: {post.id}")
                     if is_text_post(post["text"]):
                         for client in config.Config.analysis_clients:
                             analysis_coros.append(client.analyze_post(post, news_digest))
