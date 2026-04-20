@@ -49,7 +49,7 @@ class Trade(SQLModel, table=True):
     # Exit targets set at open
     stop_loss: float
     take_profit: float
-    close_at: datetime | None # scheduled time-based exit
+    close_at: datetime | None = None # scheduled time-based exit
 
     # Exit actuals
     exit_price: float | None = None
