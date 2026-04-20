@@ -33,12 +33,12 @@ async def main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor) -> None:
                     if is_text_post(post.text):
                         for client in config.Config.analysis_clients:
                             analysis_coros.append(client.analyze_post(post, news_digest))
-                    analyses = await asyncio.gather(*analysis_coros)
+                analyses = await asyncio.gather(*analysis_coros)
 
-                    for analysis in analyses:
-                        if analysis:
-                            saved_analysis = crud.save(analysis)
-                            trade_executor.process_analysis(saved_analysis)
+                for analysis in analyses:
+                    if analysis:
+                        saved_analysis = crud.save(analysis)
+                        trade_executor.process_analysis(saved_analysis)
         except Exception as e:
             logger.error(f"Exception while fetching/analyzing post: {e}")
 
