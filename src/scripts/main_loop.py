@@ -47,6 +47,6 @@ async def main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor) -> None:
 def is_text_post(post_text: str) -> bool:
     if post_text.strip() == "":
         return False
-    if post_text.startswith("RT: "):
+    if post_text.startswith("RT "):
         return False
     return True
