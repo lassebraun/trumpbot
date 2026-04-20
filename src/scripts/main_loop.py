@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from src import config
 from src.broker.trade_executor import TradeExecutor
@@ -7,35 +8,38 @@ from src.database.models import Posts
 from src.news.scheduler import get_or_refresh_digest
 from src.scraper.scraper import get_latest_posts
 
+logger = logging.getLogger(__name__)
 
 async def main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor) -> None:
-
+    logger.info("Starting main loop")
     while True:
         # Avoid getting rate blocked by the api
         anchor = crud.get_nth_latest(5)
-        posts = get_latest_posts(since_id=anchor.id if anchor else None)
-        new_posts = []
+        try:
+            posts = get_latest_posts(since_id=anchor.id if anchor else None)
+            new_posts = []
 
-        for post in posts:
-            if not crud.get_one(Posts, QueryFactory.by_id(post["id"])):
-                crud.save(Posts(**post))
-                new_posts.append(post)
+            for post in posts:
+                if not crud.get_one(Posts, QueryFactory.by_id(post.id)):
+                    crud.save(post)
+                    new_posts.append(post)
 
-        news_digest = await get_or_refresh_digest()
+            news_digest = await get_or_refresh_digest()
 
-        if new_posts:
-            analysis_coros = []
-            for post in new_posts:
-                if is_text_post(post["text"]):
-                    for client in config.Config.analysis_clients:
-                        analysis_coros.append(client.analyze_post(post, news_digest))
-                analyses = await asyncio.gather(*analysis_coros)
+            if new_posts:
+                analysis_coros = []
+                for post in new_posts:
+                    if is_text_post(post["text"]):
+                        for client in config.Config.analysis_clients:
+                            analysis_coros.append(client.analyze_post(post, news_digest))
+                    analyses = await asyncio.gather(*analysis_coros)
 
-                for analysis in analyses:
-                    if analysis:
-                        crud.save(analysis)
-                        trade_executor.process_analysis(analysis)
-
+                    for analysis in analyses:
+                        if analysis:
+                            crud.save(analysis)
+                            trade_executor.process_analysis(analysis)
+        except Exception as e:
+            logger.error(f"Exception while fetching/analyzing post: {e}")
 
         await asyncio.sleep(20)
 

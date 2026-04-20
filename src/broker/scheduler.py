@@ -6,6 +6,7 @@ from src.broker.trade_executor import TradeExecutor
 logger = logging.getLogger(__name__)
 
 def scheduler_loop(executor: TradeExecutor):
+    logger.info('Stared broker scheduler loop')
     while True:
         try:
             executor.run_scheduler_tick()
