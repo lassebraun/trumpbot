@@ -3,6 +3,7 @@ from typing import Tuple
 
 from alpaca.data import DataFeed
 
+from database.models import Trade
 from src.broker.client import BrokerClient, TradingDirection
 from src.database.crud import DatabaseCrud, QueryFactory
 from src.database.models import Trade, Analyses
@@ -68,12 +69,13 @@ class TradeExecutor:
                 continue
             fill_price, fill_time = result
 
-            exit_time = trade.entry_time + trade.duration_minutes
+            from datetime import timedelta
+            close_at = fill_time + timedelta(minutes=trade.duration_minutes)
 
             self.crud.update(trade,{
                 "entry_price": fill_price,
                 "entry_time": fill_time,
-                "exit_time": exit_time,
+                "close_at": close_at,
             })
             logger.info(f"Recorded fill for trade {trade.id} on {trade.ticker}: {fill_price} at {fill_time}")
 
@@ -155,7 +157,7 @@ class TradeExecutor:
 
         # 0.5% per impact point above threshold
         pct = (impact_score -5) * 0.005
-        dollar_amount = round(buying_power + pct, 2)
+        dollar_amount = round(buying_power * pct, 2)
 
         current_price = self._get_current_price(ticker)
         if not current_price:
@@ -177,7 +179,7 @@ class TradeExecutor:
 
         if direction == TradingDirection.LONG:
             stop_loss = current_price * (1-stop_pct)
-            take_profit = current_price * (1 + stop_pct)
+            take_profit = current_price * (1 + target_pct)
         else:
             stop_loss = current_price * (1+stop_pct)
             take_profit = current_price * (1-target_pct)

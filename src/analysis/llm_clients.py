@@ -45,7 +45,7 @@ class GemmaLocalClient(BaseLLMClient):
 
 
 class GeminiClient(BaseLLMClient):
-    def __init__(self, model: str = "gemini-3-flash-preview"):
+    def __init__(self, model: str = "gemini-2.5-flash"):
         self._model = model
 
     async def analyze_post(self, post: Posts, news_digest: NewsDigest) -> Analyses | None:

@@ -9,7 +9,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading import StopLossRequest, TakeProfitRequest
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus, OrderClass
 from alpaca.trading.requests import MarketOrderRequest
 from dotenv import load_dotenv
 
@@ -49,6 +49,7 @@ class BrokerClient:
                 "qty": qty,
                 "side": side,
                 "time_in_force": TimeInForce.DAY,
+                "order_class": OrderClass.BRACKET,
                 "stop_loss": StopLossRequest(stop_price=round(stop_loss, 2)),
                 "take_profit": TakeProfitRequest(limit_price=round(take_profit, 2)),
             }

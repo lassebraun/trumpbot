@@ -37,8 +37,8 @@ async def main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor) -> None:
 
                     for analysis in analyses:
                         if analysis:
-                            crud.save(analysis)
-                            trade_executor.process_analysis(analysis)
+                            saved_analysis = crud.save(analysis)
+                            trade_executor.process_analysis(saved_analysis)
         except Exception as e:
             logger.error(f"Exception while fetching/analyzing post: {e}")
 
