@@ -2,8 +2,6 @@ import logging
 from typing import Tuple
 
 from alpaca.data import DataFeed
-
-from database.models import Trade
 from src.broker.client import BrokerClient, TradingDirection
 from src.database.crud import DatabaseCrud, QueryFactory
 from src.database.models import Trade, Analyses
@@ -30,6 +28,7 @@ class TradeExecutor:
         )
 
         trade = Trade(
+            analysis_id=analysis.id,
             ticker = analysis.ticker,
             direction = analysis.direction.upper(),
             qty = qty,
@@ -163,7 +162,7 @@ class TradeExecutor:
         if not current_price:
             return 0.0
 
-        qty = dollar_amount / current_price
+        qty = math.floor(dollar_amount / current_price)
         return round(qty, 2)
 
 
