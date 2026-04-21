@@ -6,6 +6,7 @@ from typing import Tuple
 from alpaca.data import DataFeed
 from alpaca.data.requests import StockLatestQuoteRequest
 
+from database.models import Trade
 from src.broker.client import BrokerClient, TradingDirection
 from src.database.crud import DatabaseCrud, QueryFactory
 from src.database.models import Trade, Analyses
@@ -134,7 +135,7 @@ class TradeExecutor:
         """
         unclosed = self.crud.get_many(Trade, QueryFactory.unclosed_trades())
         for trade in unclosed:
-            result = self.broker.get_closed_position(trade.alpaca_order_id)
+            result = self.broker.get_closed_position(trade.alpaca_order_id, trade.ticker, trade.entry_time)
             if result is None:
                 continue
             exit_price, exit_time, exit_reason = result

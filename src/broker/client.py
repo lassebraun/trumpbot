@@ -95,25 +95,40 @@ class BrokerClient:
             logger.error(f"Failed to get order fill for {alpaca_order_id}: {e}")
             return None
 
-    def get_closed_position(self, alpaca_order_id: str) -> tuple[float, datetime, str] | None:
+    def get_closed_position(self, alpaca_order_id: str, ticker: str, entry_time: datetime) -> tuple[
+                                                                                                  float, datetime, str] | None:
         """
-        Checks if a bracket position has been closed by stop loss or take profit.
+        Checks if a position has been closed either via bracket legs or a manual market close.
         Returns (exit_price, exit_time, exit_reason) or None if still open.
-        Only inspects bracket legs — does not return the parent entry fill.
         """
         try:
+            # check bracket legs first (stop loss / take profit)
             order = self.client.get_order_by_id(alpaca_order_id)
+            if order.legs:
+                for leg in order.legs:
+                    if leg.status == OrderStatus.FILLED and leg.filled_avg_price:
+                        reason = self._classify_exit_reason(leg)
+                        return float(leg.filled_avg_price), leg.filled_at, reason
 
-            if not order.legs:
-                return None
-
-            for leg in order.legs:
-                if leg.status == OrderStatus.FILLED and leg.filled_avg_price:
-                    reason = self._classify_exit_reason(leg)
-                    logger.debug(
-                        f"Exit leg filled: order_type={leg.order_type} reason={reason} price={leg.filled_avg_price}"
-                    )
-                    return float(leg.filled_avg_price), leg.filled_at, reason
+            # check for a separate market close order (time-based exit)
+            activities = self.client.get_portfolio_history  # wrong, use orders instead
+            close_orders = self.client.get_orders(
+                filter=GetOrdersRequest(
+                    status=QueryOrderStatus.CLOSED,
+                    symbols=[ticker],
+                    after=entry_time,
+                )
+            )
+            for o in close_orders:
+                # skip the original entry order
+                if str(o.id) == alpaca_order_id:
+                    continue
+                if (
+                        o.status == OrderStatus.FILLED
+                        and o.side == OrderSide.SELL
+                        and o.filled_avg_price
+                ):
+                    return float(o.filled_avg_price), o.filled_at, "time_exit"
 
             return None
         except Exception as e:
