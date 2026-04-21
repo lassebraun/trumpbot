@@ -19,10 +19,15 @@ class TradeExecutor:
         self.crud = crud
 
     def process_analysis(self, analysis: Analyses) -> str | None:
+        logger.info(f"Processing analysis for {analysis.ticker} (score: {analysis.impact_score}, direction: {analysis.direction})")
         if not self._should_trade(analysis):
             return None
 
-        direction = TradingDirection(analysis.direction.upper())
+        try:
+            direction = TradingDirection(analysis.direction.upper())
+        except (ValueError, AttributeError) as e:
+            logger.error(f"Invalid direction '{analysis.direction}' for {analysis.ticker}: {e}")
+            return None
 
         # Fetch price once and pass through to avoid duplicate API calls
         current_price = self._get_current_price(analysis.ticker)
@@ -32,7 +37,7 @@ class TradeExecutor:
 
         qty = self._calculate_qty(analysis.impact_score, current_price)
         if qty <= 0:
-            logger.warning(f"Calculated qty <= 0 for {analysis.ticker}, skipping trade")
+            logger.warning(f"Calculated qty <= 0 for {analysis.ticker} (price: {current_price}, score: {analysis.impact_score}), skipping trade")
             return None
 
         stop_loss, take_profit, duration = self._calculate_exits(
@@ -40,6 +45,7 @@ class TradeExecutor:
         )
 
         try:
+            logger.info(f"Attempting to open {direction.value} position for {analysis.ticker}: qty={qty}, stop={stop_loss}, tp={take_profit}")
             order = self.broker.open_positions(
                 ticker=analysis.ticker,
                 qty=qty,
@@ -48,6 +54,7 @@ class TradeExecutor:
                 take_profit=take_profit,
             )
             if not order:
+                logger.error(f"Broker returned empty order ID for {analysis.ticker}")
                 return None
 
             trade = Trade(
@@ -62,12 +69,12 @@ class TradeExecutor:
             )
             self.crud.save(trade)
             logger.info(
-                f"Trade saved for {analysis.ticker} | score={analysis.impact_score} "
+                f"Trade SUCCESS: {analysis.ticker} | id={order} | score={analysis.impact_score} "
                 f"qty={qty} stop={stop_loss} target={take_profit} duration={duration}min"
             )
             return order
         except Exception as e:
-            logger.error(f"Failed to open position {analysis.ticker}: {e}")
+            logger.error(f"Failed to open position {analysis.ticker}: {e}", exc_info=True)
             return None
 
     # ---------------------- Scheduler entrypoint ----------------------
@@ -148,14 +155,28 @@ class TradeExecutor:
 
     def _should_trade(self, analysis: Analyses) -> bool:
         if analysis.impact_score <= 5:
+            logger.info(f"Skipping {analysis.ticker}: Impact score {analysis.impact_score} <= 5 threshold")
             return False
+        
         if not self._is_market_open():
+            logger.warning(f"Skipping {analysis.ticker}: Market is currently closed")
             return False
+            
         open_trades = self.crud.get_many(Trade, QueryFactory.open_trades())
         if len(open_trades) > 0:
+            logger.info(f"Skipping {analysis.ticker}: Already have {len(open_trades)} open trade(s)")
             return False
-        if self._is_momentum_saturated(analysis.ticker, TradingDirection(analysis.direction.upper())):
+            
+        direction_str = analysis.direction.upper() if analysis.direction else "UNKNOWN"
+        try:
+            direction = TradingDirection(direction_str)
+            if self._is_momentum_saturated(analysis.ticker, direction):
+                logger.warning(f"Skipping {analysis.ticker}: Momentum saturated for {direction_str}")
+                return False
+        except ValueError:
+            logger.error(f"Skipping {analysis.ticker}: Invalid direction '{direction_str}'")
             return False
+            
         return True
 
     def _is_market_open(self) -> bool:
