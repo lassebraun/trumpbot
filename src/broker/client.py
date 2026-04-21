@@ -10,7 +10,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading import StopLossRequest, TakeProfitRequest
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus, OrderClass
+from alpaca.trading.enums import OrderSide, TimeInForce, OrderStatus, OrderClass, GetOrdersRequest
 from alpaca.trading.requests import MarketOrderRequest
 from dotenv import load_dotenv
 
