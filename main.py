@@ -15,7 +15,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("logs/trumbot.log")
+        logging.FileHandler("logs/trumpbot.log")
     ]
 )
 
@@ -29,13 +29,16 @@ def handle_shutdown(signum, frame):
 def run_main_loop(crud: DatabaseCrud, trade_executor: TradeExecutor):
     asyncio.run(main_loop(crud, trade_executor))
 
+def run_scheduler_loop(trade_executor: TradeExecutor):
+    asyncio.run(scheduler_loop(trade_executor))
+
 def main() -> None:
     logger.info("Starting up...")
     crud, broker = startup.startup()
     trade_executor = TradeExecutor(broker, crud)
 
     main_thread = threading.Thread(target=run_main_loop, args=(crud, trade_executor), daemon=True)
-    scheduler_thread = threading.Thread(target=scheduler_loop, args=(trade_executor, ), daemon=True)
+    scheduler_thread = threading.Thread(target=run_scheduler_loop, args=(trade_executor, ), daemon=True)
 
     main_thread.start()
     scheduler_thread.start()
