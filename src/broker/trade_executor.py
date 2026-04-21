@@ -120,7 +120,7 @@ class TradeExecutor:
         """
         overdue = self.crud.get_many(Trade, QueryFactory.overdue_trades())
         for trade in overdue:
-            success = self.broker.close_position(trade.ticker)
+            success = self.broker.close_position(trade.ticker, trade.alpaca_order_id)
             if success:
                 logger.info(f"Submitted time-based close for trade {trade.id} on {trade.ticker}")
             else:

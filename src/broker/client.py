@@ -63,9 +63,19 @@ class BrokerClient:
             logger.error(f"Failed to open position on {ticker}: {e}")
             return None
 
-    def close_position(self, ticker: str) -> bool:
+    async def close_position(self, ticker: str, order_id) -> bool:
         """Closes entire open position for a ticker. Returns success bool."""
         try:
+            parent_order = self.client.get_order_by_id(order_id)
+            for leg in parent_order.legs:
+                try:
+                    self.client.cancel_order_by_id(leg.id)
+                    logger.info(f"Cancelled child order {leg.id} for {ticker}")
+                except Exception:
+                    pass  # leg may already be filled/cancelled
+
+            await asyncio.sleep(0.5)
+
             self.client.close_position(ticker)
             logger.info(f"Closed position on {ticker}")
             return True
