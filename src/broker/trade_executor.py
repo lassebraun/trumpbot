@@ -79,13 +79,13 @@ class TradeExecutor:
 
     # ---------------------- Scheduler entrypoint ----------------------
 
-    def run_scheduler_tick(self):
+    async def run_scheduler_tick(self):
         """
         Called every ~60 seconds by the scheduler loop.
         Order matters: fill entries first, then close overdue, then sync exits.
         """
         self._sync_filled_entries()
-        self._close_overdue_trades()
+        await self._close_overdue_trades()
         self._sync_closed_exits()
 
     # ---------------------- Scheduler steps ----------------------
@@ -113,14 +113,14 @@ class TradeExecutor:
                 f"{fill_price} at {fill_time}, close_at={close_at}"
             )
 
-    def _close_overdue_trades(self) -> None:
+    async def _close_overdue_trades(self) -> None:
         """
         For trades that are filled, still open, and past their close_at window,
         submit a market close to Alpaca.
         """
         overdue = self.crud.get_many(Trade, QueryFactory.overdue_trades())
         for trade in overdue:
-            success = self.broker.close_position(trade.ticker, trade.alpaca_order_id)
+            success = await self.broker.close_position(trade.ticker, trade.alpaca_order_id)
             if success:
                 logger.info(f"Submitted time-based close for trade {trade.id} on {trade.ticker}")
             else:
