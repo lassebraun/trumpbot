@@ -6,7 +6,6 @@ from typing import Tuple
 from alpaca.data import DataFeed
 from alpaca.data.requests import StockLatestQuoteRequest
 
-from database.models import Trade
 from src.broker.client import BrokerClient, TradingDirection
 from src.database.crud import DatabaseCrud, QueryFactory
 from src.database.models import Trade, Analyses
