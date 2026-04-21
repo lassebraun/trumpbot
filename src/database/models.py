@@ -21,8 +21,8 @@ class Analyses(SQLModel, table=True):
     post_id: str = Field(foreign_key='posts.id')
     news_summary_id: Optional[int] = Field(default=None, foreign_key='news_digests.id')
     model: str
-    impact_score: int
-    ticker: str
+    impact_score: int | None
+    ticker: str | None
     direction: str
     reasoning: str
     created_at: str
